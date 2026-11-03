@@ -13,7 +13,7 @@
   body::after{ content:""; position:fixed; inset:0; pointer-events:none; z-index:90;
     background:repeating-linear-gradient(0deg, rgba(0,0,0,.20) 0 1px, transparent 1px 3px); }
   #wrap{ max-width:760px; margin:0 auto; padding:14px 16px 45vh; }
-  header{ display:flex; align-items:baseline; gap:12px; padding:10px 2px 12px;
+  header{ display:flex; align-items:baseline; gap:12px; padding:10px 2px 12px; flex-wrap:wrap;
     border-bottom:1px solid rgba(232,163,61,.25); position:sticky; top:0; z-index:40;
     background:linear-gradient(#060806 72%, rgba(6,8,6,0)); }
   header h1{ font-size:16px; letter-spacing:4px; font-weight:700;
@@ -22,7 +22,12 @@
   footer{ margin-top:26px; padding:12px 2px 0; border-top:1px solid rgba(232,163,61,.25);
     font-size:9px; letter-spacing:1px; color:#7c6a48; line-height:1.8; }
   footer p{ margin:2px 0; }
-  #gear{ margin-left:auto; background:none; border:1px solid rgba(232,163,61,.45); color:var(--amber);
+  #presets{ display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
+  .pbtn{ background:none; border:1px solid rgba(232,163,61,.45); color:var(--dim);
+    font:inherit; font-size:9px; letter-spacing:1px; padding:4px 8px; cursor:pointer; }
+  .pbtn:hover{ color:var(--hi); background:rgba(232,163,61,.14); }
+  .pbtn.on{ color:var(--ink); background:var(--amber); border-color:var(--amber); }
+  #gear{ background:none; border:1px solid rgba(232,163,61,.45); color:var(--amber);
     font:inherit; font-size:10px; letter-spacing:2px; padding:5px 10px; cursor:pointer; }
   #gear:hover,#gear.on{ background:rgba(232,163,61,.14); color:var(--hi); }
 
@@ -93,6 +98,7 @@
 <div id="wrap">
   <header>
     <h1>КРЕАТИВНЫЙ ДОВОДЧИК</h1>
+    <nav id="presets" title="тональность осей"></nav>
     <button id="gear" title="настройки подключения">НАСТРОЙКИ</button>
   </header>
 
@@ -436,6 +442,21 @@ function placeUI(mvp, r){
 }
 
 /* ---------- промпты ---------- */
+/* ---------- пресеты тональности осей ---------- */
+const PRESETS = [
+  { id:'sci', label:'НАУЧНЫЙ', name:'научная',
+    sys:'Приоритетная тональность — научная. Оси — строгие и точные степени: «академичнее», «терминологичнее», «суше», «строже» (это примеры, не повторяй их вслепую). Варианты держат научный регистр: точные формулировки, терминология, никакой эксцентрики и эмоций.' },
+  { id:'lit', label:'ЛИТЕРАТУРНЫЙ', name:'художественная',
+    sys:'Приоритетная тональность — художественная литература. Оси — из арсенала писателя: «лиричнее», «метафоричнее», «звонче», «изящнее» (это примеры, не повторяй их вслепую). Варианты — настоящая проза: образность, ритм, вкус к слову.' },
+  { id:'fan', label:'ФАНТАСТИЧЕСКИЙ', name:'фантастическая',
+    sys:'Приоритетная тональность — фантастика. Оси — из чужих миров: «мистичнее», «чуждее», «фантастичнее», «первобытнее» (это примеры, не повторяй их вслепую). Варианты будто из фантастического рассказа: странное прорастает сквозь обыденное, но слова словарные и логика на месте.' },
+  { id:'kid', label:'ДЕТСКИЙ', name:'детская',
+    sys:'Приоритетная тональность — детская книжка. Оси — светлые и игровые степени: «веселее», «сказочнее», «наивнее», «игривее» (это примеры, не повторяй их вслепую). Варианты — короткие простые фразы, добрый тон, без сложных терминов и страшилок.' },
+];
+let preset = '';   // id активного пресета; '' = нейтральный (текущий эксцентричный тон)
+function presetSys(){ const p = PRESETS.find(x => x.id === preset); return p ? '\n' + p.sys : ''; }
+function presetHint(){ const p = PRESETS.find(x => x.id === preset); return p ? '\nТональность — ' + p.name + '.' : ''; }
+
 const SYSTEM_MAIN = `Ты — ассистент для пошаговой доработки текста. Пользователь вводит черновой фрагмент, а ты предлагаешь его варианты и развития. Правила:
 1. В ответе — ТОЛЬКО готовый текст, без пояснений, без кавычек.
 2. Объём: 1–4 предложения.
@@ -485,17 +506,18 @@ ${hist.map((h,i) => `${i+1}) ${h}`).join('\n')}
 
 /* ---------- клиент нейронки ---------- */
 function getCfg(){
+  const dflt = {base:'https://api.openai.com/v1', model:'gpt-4o-mini', key:'', tokens:1200, preset:''};
   try{ const c = JSON.parse(localStorage.getItem('dvdc_cfg')||'{}');
-    return { base:c.base||'https://api.openai.com/v1', model:c.model||'gpt-4o-mini', key:c.key||'',
-      tokens: c.tokens||1200 };
-  }catch(e){ return {base:'https://api.openai.com/v1', model:'gpt-4o-mini', key:'', tokens:1200}; }
+    return { base:c.base||dflt.base, model:c.model||dflt.model, key:c.key||'',
+      tokens:c.tokens||dflt.tokens, preset: typeof c.preset==='string' ? c.preset : '' };
+  }catch(e){ return dflt; }
 }
 function saveCfg(){
   localStorage.setItem('dvdc_cfg', JSON.stringify(getCfgFromUI()));
 }
 function getCfgFromUI(){
   return { base:$('cfg_base').value.trim(), model:$('cfg_model').value.trim(), key:$('cfg_key').value.trim(),
-    tokens: Math.max(10, parseInt($('cfg_tokens').value,10)||1200) };
+    tokens: Math.max(10, parseInt($('cfg_tokens').value,10)||1200), preset };
 }
 function tracked(p){ S.busyN++; const done = () => S.busyN--; p.then(done, done); return p; }
 async function chat(messages, maxTok){
@@ -561,8 +583,8 @@ async function ensureLabels(text){
   S.labelCache.set(text, entry);
   if(S.labelCache.size > 40){ const k = S.labelCache.keys().next().value; S.labelCache.delete(k); }
   const comboMsgs = hard => [
-    {role:'system', content:SYSTEM_COMBO},
-    {role:'user', content:userCombo(ctxText(), text) + (hard
+    {role:'system', content:SYSTEM_COMBO + presetSys()},
+    {role:'user', content:userCombo(ctxText(), text) + presetHint() + (hard
       ? '\n\nВажно: ответ — строго JSON-массив ровно из четырёх объектов, например [{"ось":"пьянее","вариант":"текст пьянее"},{"ось":"соннее","вариант":"текст соннее"},{"ось":"мрачнее","вариант":"текст мрачнее"},{"ось":"сказочнее","вариант":"текст сказочнее"}]. Ось — словарное слово, ничего не коверкать. Никакого текста вне массива.'
       : '')}
   ];
@@ -583,7 +605,8 @@ async function ensureLabels(text){
 function tok4(){ const t = getCfgFromUI().tokens; return Math.min(32000, Math.max(600, t*4)); }
 function genVariant(entry, w){
   const p = tracked(chat(
-    [{role:'system', content:SYSTEM_VARIANT}, {role:'user', content:userVariant(ctxText(), entry.text, w)}]));
+    [{role:'system', content:SYSTEM_VARIANT + presetSys()},
+     {role:'user', content:userVariant(ctxText(), entry.text, w) + presetHint()}]));
   entry.failed.delete(w);
   entry.proms.set(w, p);
   p.then(t => entry.variants.set(w, t), () => entry.failed.add(w));   // тихий учёт; ошибка всплывёт при клике
@@ -772,6 +795,22 @@ function renderArch(){
 }
 
 /* ---------- настройки ---------- */
+function setPreset(id){
+  preset = PRESETS.some(p => p.id === id) ? id : '';   // неизвестный id = нейтральный
+  PRESETS.forEach(p => $('pbtn_'+p.id).classList[p.id === preset ? 'add' : 'remove']('on'));
+  localStorage.setItem('dvdc_cfg', JSON.stringify(getCfgFromUI()));
+  S.labelCache.clear();   // оси из кэша могли быть в другой тональности
+}
+function initPresets(){
+  const box = $('presets');
+  PRESETS.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'pbtn'; b.id = 'pbtn_'+p.id; b.textContent = p.label; b.title = 'тональность: ' + p.name;
+    b.onclick = () => setPreset(preset === p.id ? '' : p.id);   // повторный клик — снять выбор
+    box.appendChild(b);
+  });
+  setPreset(getCfg().preset);
+}
 function openCfg(){ $('cfg').classList.add('open'); $('gear').classList.add('on'); }
 function closeCfg(){ $('cfg').classList.remove('open'); $('gear').classList.remove('on'); }
 function initCfgUI(){
@@ -816,6 +855,7 @@ try{
   toast('WebGL недоступен — куб не отрисуется; включи аппаратное ускорение');
 }
 const cfg0 = initCfgUI();
+initPresets();
 showInput('');
 if(!cfg0.key) openCfg();
 

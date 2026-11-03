@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache">
+<title>Креативный доводчик</title>
+<style>
+  :root{ --amber:#e8a33d; --hi:#ffcf7d; --dim:#9a8c66; --ink:#060806; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ background:var(--ink); color:var(--amber);
+    font-family:ui-monospace,"DejaVu Sans Mono","Courier New",monospace; }
+  body::after{ content:""; position:fixed; inset:0; pointer-events:none; z-index:90;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.20) 0 1px, transparent 1px 3px); }
+  #wrap{ max-width:760px; margin:0 auto; padding:14px 16px 45vh; }
+  header{ display:flex; align-items:baseline; gap:12px; padding:10px 2px 12px;
+    border-bottom:1px solid rgba(232,163,61,.25); position:sticky; top:0; z-index:40;
+    background:linear-gradient(#060806 72%, rgba(6,8,6,0)); }
+  header h1{ font-size:16px; letter-spacing:4px; font-weight:700;
+    text-shadow:0 0 14px rgba(232,163,61,.45); white-space:nowrap; }
+
+  footer{ margin-top:26px; padding:12px 2px 0; border-top:1px solid rgba(232,163,61,.25);
+    font-size:9px; letter-spacing:1px; color:#7c6a48; line-height:1.8; }
+  footer p{ margin:2px 0; }
+  #gear{ margin-left:auto; background:none; border:1px solid rgba(232,163,61,.45); color:var(--amber);
+    font:inherit; font-size:10px; letter-spacing:2px; padding:5px 10px; cursor:pointer; }
+  #gear:hover,#gear.on{ background:rgba(232,163,61,.14); color:var(--hi); }
+
+  /* настройки подключения — единственная панель вне ленты */
+  #cfg{ display:none; position:fixed; top:52px; right:12px; z-index:60; width:min(420px,94vw);
+    background:#0b0e0a; border:1px solid rgba(232,163,61,.5); padding:14px;
+    box-shadow:0 0 40px rgba(232,163,61,.12), 0 10px 30px rgba(0,0,0,.6); }
+  #cfg.open{ display:block; }
+  #cfg h3{ font-size:11px; letter-spacing:3px; color:var(--hi); margin-bottom:10px; }
+  #cfg label{ display:block; font-size:9px; letter-spacing:1px; color:var(--dim); margin:9px 0 3px; }
+  #cfg input{ width:100%; background:#060806; border:1px solid rgba(232,163,61,.35);
+    color:var(--hi); font:inherit; font-size:12px; padding:7px 9px; outline:none; }
+  #cfg input:focus{ border-color:var(--amber); }
+  .cfgrow{ display:flex; gap:8px; margin-top:12px; }
+  .cfgbtn{ flex:1; background:none; border:1px solid rgba(232,163,61,.5); color:var(--amber);
+    font:inherit; font-size:10px; letter-spacing:1px; padding:8px 6px; cursor:pointer; }
+  .cfgbtn:hover{ background:rgba(232,163,61,.14); color:var(--hi); }
+  #cfgstat{ font-size:10px; color:var(--dim); margin-top:8px; min-height:14px; }
+  #archlist{ margin-top:10px; max-height:180px; overflow:auto; border-top:1px dashed rgba(232,163,61,.25);
+    padding-top:8px; }
+  #archlist .a{ font-size:10px; color:var(--dim); padding:4px 0; border-bottom:1px dotted rgba(232,163,61,.12);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* лента кубов — карточка выглядит точно как активный куб */
+  .hcard{ width:min(620px,92vw); margin:34px auto 0; animation:rise .55s ease both; }
+  @keyframes rise{ from{ opacity:0; transform:translateY(46px);} to{ opacity:1; transform:none;} }
+  .hcard img{ width:100%; aspect-ratio:1/1; display:block;
+    filter:drop-shadow(0 0 26px rgba(232,163,61,.14)); }
+
+  #stage{ position:relative; width:min(620px,92vw); aspect-ratio:1/1; margin:34px auto 6px; }
+  #glc{ position:absolute; inset:0; width:100%; height:100%; display:block;
+    filter:drop-shadow(0 0 26px rgba(232,163,61,.14)); }
+
+  /* окно ввода поверх лицевой грани; без WebGL разворачивается на всю сцену */
+  #faceui{ position:absolute; inset:0; display:none; z-index:20; }
+  #faceui.show{ display:block; }
+  #faceui textarea{ position:absolute; left:9%; right:9%; top:16%; bottom:17%;
+    width:82%; height:67%; background:rgba(6,8,6,.25); border:none; outline:none; resize:none;
+    color:var(--hi); font:inherit; line-height:1.55; padding:2px; }
+
+  /* подписи осей вдоль боков лицевой грани */
+  .chip{ position:absolute; z-index:30; transform:translate(-50%,-50%);
+    background:#0b0e0a; border:1px solid rgba(232,163,61,.6); color:var(--hi);
+    font:inherit; font-size:12px; letter-spacing:1px; padding:5px 12px; cursor:pointer;
+    box-shadow:0 0 14px rgba(232,163,61,.15); white-space:nowrap; }
+  .chip:hover{ background:rgba(232,163,61,.2); box-shadow:0 0 22px rgba(232,163,61,.4); }
+  .chip.pend{ color:var(--dim); border-style:dashed; }
+  .chip.pend::after{ content:" …"; }
+  .chip.err{ color:#e06a5a; border-color:rgba(224,106,90,.7); }
+  .chip.err::after{ content:" !"; }
+
+  #toast{ position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(80px);
+    background:#0b0e0a; border:1px solid rgba(232,163,61,.55); color:var(--hi);
+    font-size:11.5px; letter-spacing:1px; padding:10px 18px; z-index:80; opacity:0;
+    transition:all .35s ease; pointer-events:none; max-width:86vw; text-align:center; }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <h1>КРЕАТИВНЫЙ ДОВОДЧИК</h1>
+    <button id="gear" title="настройки подключения">НАСТРОЙКИ</button>
+  </header>
+
+  <main id="tape"></main>
+
+  <div id="stage">
+    <canvas id="glc"></canvas>
+    <div id="faceui">
+      <textarea id="seed" maxlength="600" spellcheck="false" placeholder="введи текст…"></textarea>
+    </div>
+    <div id="chips"></div>
+  </div>
+
+  <footer>
+    <p>Интерфейс вдохновлён идеями Виктора Пелевина.</p>
+    <p>Введённые тексты и настройки (включая ключ) хранятся только в локальном хранилище этого браузера и отправляются исключительно на указанный в настройках endpoint.</p>
+  </footer>
+</div>
+
+<div id="cfg">
+  <h3>НАСТРОЙКИ ПОДКЛЮЧЕНИЯ</h3>
+  <label>ENDPOINT (openai-совместимый)</label>
+  <input id="cfg_base" spellcheck="false">
+  <label>МОДЕЛЬ</label>
+  <input id="cfg_model" spellcheck="false">
+  <label>МАКС. ТОКЕНОВ НА ЗАПРОС</label>
+  <input id="cfg_tokens" type="number" min="10" max="32000" step="10" spellcheck="false">
+  <label>КЛЮЧ</label>
+  <input id="cfg_key" type="password" spellcheck="false">
+  <div class="cfgrow">
+    <button class="cfgbtn" id="cfg_check">ПРОВЕРИТЬ СВЯЗЬ</button>
+    <button class="cfgbtn" id="cfg_show">ПОКАЗАТЬ КЛЮЧ</button>
+  </div>
+  <div id="cfgstat"></div>
+  <h3 style="margin-top:14px">АРХИВ ТЕКСТОВ</h3>
+  <div id="archlist"></div>
+  <div class="cfgrow">
+    <button class="cfgbtn" id="arch_copy">СКОПИРОВАТЬ ВСЁ</button>
+    <button class="cfgbtn" id="arch_clear">ОЧИСТИТЬ</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+let toastT = 0;
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3600); }
+addEventListener('error', e => {
+  try{
+    const st = e.error && e.error.stack ? ' | ' + String(e.error.stack).split('\n').slice(0,2).join(' <- ') : '';
+    toast('ОШИБКА: ' + (e.message||'') + ' @' + (e.lineno||'') + st);
+  }catch(_){ /* сам обработчик не должен порождать ошибок */ }
+});
+
+/*Q-LIB*/
+const Q = (() => {
+  const D2R = Math.PI/180;
+  const ax = (a, deg) => { const r = deg*D2R, s = Math.sin(r/2); return [Math.cos(r/2), a[0]*s, a[1]*s, a[2]*s]; };
+  const mul = (a,b) => [
+    a[0]*b[0]-a[1]*b[1]-a[2]*b[2]-a[3]*b[3],
+    a[0]*b[1]+a[1]*b[0]+a[2]*b[3]-a[3]*b[2],
+    a[0]*b[2]-a[1]*b[3]+a[2]*b[0]+a[3]*b[1],
+    a[0]*b[3]+a[1]*b[2]-a[2]*b[1]+a[3]*b[0]];
+  const norm = q => { const l = Math.hypot(...q)||1; return q.map(v => v/l); };
+  const dot = (a,b) => a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3];
+  const slerp = (a,b,t) => {
+    let d = dot(a,b);
+    if(d < 0){ b = b.map(v => -v); d = -d; }
+    if(d > .9995) return norm(a.map((v,i) => v+(b[i]-v)*t));
+    const th = Math.acos(Math.min(1,d)), s = Math.sin(th);
+    return norm(a.map((v,i) => v*Math.sin((1-t)*th)/s + b[i]*Math.sin(t*th)/s));
+  };
+  const apply = (q,v) => {           // поворот вектора кватернионом
+    const [w,x,y,z] = q, [vx,vy,vz] = v;
+    const tx = 2*(y*vz-z*vy), ty = 2*(z*vx-x*vz), tz = 2*(x*vy-y*vx);
+    return [vx+w*tx+(y*tz-z*ty), vy+w*ty+(z*tx-x*tz), vz+w*tz+(x*ty-y*tx)];
+  };
+  const mat = q => {                  // столбцовая матрица поворота 4x4
+    const [w,x,y,z] = q;
+    return [
+      1-2*(y*y+z*z), 2*(x*y+w*z), 2*(x*z-w*y), 0,
+      2*(x*y-w*z), 1-2*(x*x+z*z), 2*(y*z+w*x), 0,
+      2*(x*z+w*y), 2*(y*z-w*x), 1-2*(x*x+y*y), 0,
+      0,0,0,1];
+  };
+  return {ax, mul, norm, dot, slerp, apply, mat, ID:[1,0,0,0]};
+})();
+const ALIGNED = (() => {
+  const out = [];
+  const AX = {X:[1,0,0],Y:[0,1,0],Z:[0,0,1]};
+  for(let i=0;i<4;i++) for(let j=0;j<4;j++) for(let k=0;k<4;k++){
+    const q = Q.norm(Q.mul(Q.ax(AX.X,i*90), Q.mul(Q.ax(AX.Y,j*90), Q.ax(AX.Z,k*90))));
+    if(!out.some(o => Math.abs(Q.dot(o,q)) > .999)) out.push(q);
+  }
+  return out;
+})();
+/*END-Q-LIB*/
+
+/* ---------- геометрия куба ---------- */
+const H = 1.0;
+const FACES = [
+  {name:'ПЕРЕД', n:[0,0,1]}, {name:'ЗАД',  n:[0,0,-1]},
+  {name:'ПРАВО',n:[1,0,0]}, {name:'ЛЕВО', n:[-1,0,0]},
+  {name:'ВЕРХ', n:[0,1,0]}, {name:'НИЗ',  n:[0,-1,0]}
+];
+// вершины: [x,y,z,u,v] — обход против часовой извне, u растёт вправо для внешнего зрителя
+const GEO = [
+  [[-H,-H, H,0,0],[ H,-H, H,1,0],[ H, H, H,1,1],[-H, H, H,0,1]],
+  [[ H,-H,-H,0,0],[-H,-H,-H,1,0],[-H, H,-H,1,1],[ H, H,-H,0,1]],
+  [[ H,-H, H,0,0],[ H,-H,-H,1,0],[ H, H,-H,1,1],[ H, H, H,0,1]],
+  [[-H,-H,-H,0,0],[-H,-H, H,1,0],[-H, H, H,1,1],[-H, H,-H,0,1]],
+  [[-H, H, H,0,0],[ H, H, H,1,0],[ H, H,-H,1,1],[-H, H,-H,0,1]],
+  [[-H,-H,-H,0,0],[ H,-H,-H,1,0],[ H,-H, H,1,1],[-H,-H, H,0,1]]
+];
+// «верх» и «право» текстуры каждой грани выводим из GEO (рост v и рост u),
+// чтобы таблицы не могли разойтись с вершинами
+const UP_LOCAL = GEO.map(v => [v[3][0]-v[0][0], v[3][1]-v[0][1], v[3][2]-v[0][2]]);
+const R_LOCAL  = GEO.map(v => [v[1][0]-v[0][0], v[1][1]-v[0][1], v[1][2]-v[0][2]]);
+function faceUpAngle(q, fi){
+  const w = Q.apply(q, UP_LOCAL[fi]);   // куда куб повернул «верх» этой грани
+  const r = Q.apply(q, R_LOCAL[fi]);    // куда куб повернул «право» этой грани
+  // лицевая грань всегда параллельна экрану, так что хватает x/y-компонент:
+  // atan2(r_y, w_y) — canvas-угол, выпрямляющий текст (0 при уже прямом тексте)
+  return Math.atan2(r[1], w[1]);
+}
+
+/* направления прокрутки: подписи вдоль четырёх сторон лицевой грани */
+const AX = {X:[1,0,0], Y:[0,1,0], Z:[0,0,1]};
+const DIRS = { T:[[AX.X, 90]], B:[[AX.X,-90]], L:[[AX.Y, 90]], R:[[AX.Y,-90]] };
+// слово №i встаёт у середины стороны SIDE_ORDER[i]: верх, право, низ, лево
+const SIDE_ORDER = ['T','R','B','L'];
+
+/* ---------- WebGL ---------- */
+const glc = $('glc');
+const gl = glc.getContext('webgl', {antialias:true, preserveDrawingBuffer:true});
+let prog, loc = {}, texs = [], vbo, ibo;
+
+function shader(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function initGL(){
+  prog = gl.createProgram();
+  gl.attachShader(prog, shader(gl.VERTEX_SHADER, `
+    attribute vec3 p; attribute vec2 uv; attribute vec3 n;
+    uniform mat4 mvp; uniform mat4 rot; varying vec2 v; varying float nz;
+    void main(){ v = uv; nz = (rot*vec4(n,0.)).z; gl_Position = mvp*vec4(p,1.); }`));
+  gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, `
+    precision mediump float; varying vec2 v; varying float nz;
+    uniform sampler2D tex; uniform float pulse;
+    void main(){
+      vec4 c = texture2D(tex, v);
+      float lit = .42 + .58*max(nz, 0.);
+      gl_FragColor = vec4(c.rgb*lit*pulse, 1.);
+    }`));
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  ['mvp','rot','tex','pulse'].forEach(u => loc[u] = gl.getUniformLocation(prog, u));
+  ['p','uv','n'].forEach(a => loc[a] = gl.getAttribLocation(prog, a));
+
+  const verts = [], idx = [];
+  GEO.forEach((f,fi) => {
+    const n = FACES[fi].n;
+    f.forEach(v => verts.push(v[0],v[1],v[2],v[3],v[4], n[0],n[1],n[2]));
+    idx.push(fi*4, fi*4+1, fi*4+2, fi*4, fi*4+2, fi*4+3);
+  });
+  vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+  ibo = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+  const st = 8*4;
+  gl.enableVertexAttribArray(loc.p); gl.vertexAttribPointer(loc.p, 3, gl.FLOAT, false, st, 0);
+  gl.enableVertexAttribArray(loc.uv); gl.vertexAttribPointer(loc.uv, 2, gl.FLOAT, false, st, 12);
+  gl.enableVertexAttribArray(loc.n); gl.vertexAttribPointer(loc.n, 3, gl.FLOAT, false, st, 20);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+  gl.clearColor(0,0,0,0);
+  texs = FACES.map(() => {
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  });
+}
+
+function drawFaceTexture(i, text, mode, ang){
+  if(!gl) return;   // без WebGL текстуры грузить некуда
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0,0,512,512);
+  grd.addColorStop(0,'#241b0c'); grd.addColorStop(1,'#0e0b05');
+  g.fillStyle = grd; g.fillRect(0,0,512,512);
+  g.strokeStyle = 'rgba(232,163,61,.55)'; g.lineWidth = 6; g.strokeRect(10,10,492,492);
+  g.strokeStyle = 'rgba(232,163,61,.18)'; g.lineWidth = 2; g.strokeRect(24,24,464,464);
+  g.textAlign = 'left';
+  g.save();
+  if(ang){ g.translate(256,256); g.rotate(ang); g.translate(-256,-256); }   // текст всегда читаем горизонтально
+  if(mode === 'err'){
+    g.fillStyle = '#e06a5a'; g.font = '22px ui-monospace, monospace';
+    (text||'').split(/\n/).slice(0,9).forEach((ln,k) => g.fillText(ln.slice(0,42), 40, 150+k*30));
+  } else if(mode === 'blank' || mode === 'input'){
+    // просто рамка — ввод идёт поверх прозрачной textarea
+  } else {
+    g.fillStyle = '#ffcf7d'; g.font = '25px ui-monospace, monospace';
+    const words = (text||'…').split(/\s+/); const lines = []; let line = '';
+    for(const w of words){
+      const probe = line ? line+' '+w : w;
+      if(g.measureText(probe).width > 432 && line){ lines.push(line); line = w; }
+      else line = probe;
+      if(lines.length > 11) break;
+    }
+    if(lines.length <= 11) lines.push(line);
+    if(lines.length > 12) lines[11] = '…';
+    lines.slice(0,12).forEach((ln,k) => g.fillText(ln, 40, 130+k*31));
+  }
+  g.restore();
+  gl.bindTexture(gl.TEXTURE_2D, texs[i]);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+}
+
+function persp(fovy, asp, n, f){
+  const t = 1/Math.tan(fovy*Math.PI/360);
+  return [t/asp,0,0,0, 0,t,0,0, 0,0,(f+n)/(n-f),-1, 0,0,2*f*n/(n-f),0];
+}
+function mul4(a,b){
+  const o = new Array(16);
+  for(let c=0;c<4;c++) for(let r=0;r<4;r++){
+    let s=0; for(let k=0;k<4;k++) s += a[k*4+r]*b[c*4+k];
+    o[c*4+r]=s;
+  }
+  return o;
+}
+function mvpFor(q){
+  const r = glc.getBoundingClientRect();
+  const dpr = window.devicePixelRatio||1;
+  if(glc.width !== Math.round(r.width*dpr) || glc.height !== Math.round(r.height*dpr)){
+    glc.width = Math.round(r.width*dpr); glc.height = Math.round(r.height*dpr);
+  }
+  gl.viewport(0,0,glc.width,glc.height);
+  const T = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,-4.6,1];
+  return mul4(persp(34, r.width/Math.max(r.height,1), .1, 40), mul4(T, Q.mat(q)));
+}
+
+/* ---------- состояние ---------- */
+const S = {
+  q: Q.ID,                     // ориентация куба
+  anim: null,                  // {from,to,t0,dur}
+  faces: FACES.map(() => ({text:'', mode:'blank'})),
+  labels: [],                  // [{word, side, slot, entry}]
+  labelCache: new Map(),       // text → {words, variants:Map, proms:Map}
+  history: [],                 // зафиксированные фрагменты
+  busyN: 0,                    // активные запросы к нейронке (грани мерцают)
+  holdPulse: false,            // кадр для ленты: мерцание приглушено
+  committing: false,           // идёт снимок зафиксированного куба
+  autoPend: false,             // идёт автопродолжение после фиксации
+  editing: true
+};
+function frontFace(q){
+  let bi = 0, bz = -2;
+  FACES.forEach((f,i) => { const w = Q.apply(q, f.n); if(w[2] > bz){ bz = w[2]; bi = i; } });
+  return bi;
+}
+const easeIO = t => t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
+
+/* ---------- рендер ---------- */
+let lastT = 0;
+function render(t){
+  requestAnimationFrame(render);
+  const dt = Math.min(50, t-lastT); lastT = t;
+  let q = S.q;
+  if(S.anim){
+    const k = Math.min(1, (t-S.anim.t0)/S.anim.dur);
+    q = Q.slerp(S.anim.from, S.anim.to, easeIO(k));
+    if(k >= 1){ S.q = S.anim.to; q = S.q; S.anim = null; onSettled(); }
+  } else {
+    const sway = .035;
+    q = Q.mul(Q.ax(AX.Y, Math.sin(t/2600)*sway*57.3), q);
+  }
+  const mvp = mvpFor(q);
+  const r = glc.getBoundingClientRect();
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.uniform1f(loc.pulse, S.busyN && !S.holdPulse ? 1-.3*(0.5+0.5*Math.sin(t/85)) : 1);   // грани мерцают, пока нейронка работает
+  gl.uniformMatrix4fv(loc.mvp, false, new Float32Array(mvp));
+  gl.uniformMatrix4fv(loc.rot, false, new Float32Array(Q.mat(q)));
+  FACES.forEach((_,i) => {
+    gl.bindTexture(gl.TEXTURE_2D, texs[i]);
+    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, i*12);
+  });
+  placeUI(mvp, r);
+}
+// проекция угла лицевой грани → экранный бокс
+function faceRect(mvp, r){
+  const h = H, pts = [[-h,-h,h],[h,-h,h],[h,h,h],[-h,h,h]], xs = [], ys = [];
+  for(const [x,y,z] of pts){
+    const cx = mvp[0]*x+mvp[4]*y+mvp[8]*z+mvp[12];
+    const cy = mvp[1]*x+mvp[5]*y+mvp[9]*z+mvp[13];
+    const cw = mvp[3]*x+mvp[7]*y+mvp[11]*z+mvp[15];
+    xs.push((cx/cw*.5+.5)*r.width); ys.push((.5-cy/cw*.5)*r.height);
+  }
+  return {x:Math.min(...xs), y:Math.min(...ys), w:Math.max(...xs)-Math.min(...xs), h:Math.max(...ys)-Math.min(...ys)};
+}
+let chipsVer = '';
+// чипы всегда в одних и тех же четырёх местах сцены — куб после поворота фронтален,
+// позиция задаётся один раз при создании и не пересчитывается
+const CHIP_POS = { T:['50%','3%'], R:['97%','50%'], B:['50%','97%'], L:['3%','50%'] };
+function placeUI(mvp, r){
+  const b = faceRect(mvp, r);
+  const ui = $('faceui');
+  if(ui.classList.contains('show')){
+    ui.style.left = b.x+'px'; ui.style.top = b.y+'px';
+    ui.style.width = b.w+'px'; ui.style.height = b.h+'px';
+    $('seed').style.fontSize = Math.max(11, b.w*.045)+'px';
+  }
+  const ch = $('chips');
+  const alive = !S.anim && !S.editing && S.labels.length > 0;
+  const st = L0 => L0.entry.variants.get(L0.word) ? '!' : (L0.entry.failed.has(L0.word) ? 'x' : '.');
+  const ver = alive ? S.labels.map(L => L.word+st(L)+L.slot).join('|') : '';
+  if(ver === chipsVer) return;
+  chipsVer = ver;
+  ch.innerHTML = '';
+  if(alive) S.labels.forEach(L => {
+    const d = document.createElement('button');
+    const cls = L.entry.variants.get(L.word) ? '' : (L.entry.failed.has(L.word) ? ' err' : ' pend');
+    d.className = 'chip'+cls;
+    d.textContent = L.word;
+    d.style.left = CHIP_POS[L.slot][0];
+    d.style.top = CHIP_POS[L.slot][1];
+    d.onclick = () => poke(L);
+    L.el = d; ch.appendChild(d);
+  });
+}
+
+/* ---------- промпты ---------- */
+const SYSTEM_MAIN = `Ты — ассистент для пошаговой доработки текста. Пользователь вводит черновой фрагмент, а ты предлагаешь его варианты и развития. Правила:
+1. В ответе — ТОЛЬКО готовый текст, без пояснений, без кавычек.
+2. Объём: 1–4 предложения.
+3. Смысл исходника сохраняй, новых фактов не выдумывай.
+4. Сохраняй стиль и голос исходного фрагмента.
+5. Не добавляй вступлений, извинений и комментариев.`;
+
+const SYSTEM_COMBO = `Ты — ассистент для пошаговой доработки текста. Пользователь вводит черновой фрагмент, ты выбираешь четыре направления доработки и пишешь по одному варианту для каждого. Правила:
+1. Направление — ровно одно слово в сравнительной степени русского прилагательного или наречия («проще», «злее», «короче», «лиричней» — это примеры, не повторяй их вслепую); четыре направления разные.
+2. Вариант — фрагмент, изменённый ровно на один шаг вдоль своего направления: минимальная правка, а не переписывание с нуля. Объём 1–4 предложения, смысл и голос исходника сохраняй, новых фактов не выдумывай.
+3. Ответ — строго JSON-массив из четырёх объектов и ничего больше:
+[{"ось":"слово","вариант":"текст варианта"},{"ось":"слово","вариант":"текст варианта"},{"ось":"слово","вариант":"текст варианта"},{"ось":"слово","вариант":"текст варианта"}]`;
+
+function userCombo(ctx, text){
+  return `Ранее зафиксированный контекст:
+«${ctx}»
+
+Текущий фрагмент:
+«${text}»
+
+Верни JSON-массив ровно из четырёх объектов {"ось","вариант"}: направления доработки текущего фрагмента и по одному минимальному варианту для каждого.`;
+}
+function userVariant(ctx, text, word){
+  return `Ранее зафиксированный контекст:
+«${ctx}»
+
+Текущий фрагмент:
+«${text}»
+
+Ось смысла: «${word}».
+Измени фрагмент ровно на один шаг вдоль этой оси — минимальная правка, а не переписывание с нуля. В ответе — только текст.`;
+}
+function userContinue(hist){
+  return `Зафиксированные фрагменты:
+${hist.map((h,i) => `${i+1}) ${h}`).join('\n')}
+
+Напиши следующий фрагмент — естественное продолжение в том же голосе, 1–4 предложения, которое двигает текст вперёд, а не пересказывает. В ответе — только текст нового фрагмента.`;
+}
+
+/* ---------- клиент нейронки ---------- */
+function getCfg(){
+  try{ const c = JSON.parse(localStorage.getItem('dvdc_cfg')||'{}');
+    return { base:c.base||'https://api.openai.com/v1', model:c.model||'gpt-4o-mini', key:c.key||'',
+      tokens: c.tokens||1200 };
+  }catch(e){ return {base:'https://api.openai.com/v1', model:'gpt-4o-mini', key:'', tokens:1200}; }
+}
+function saveCfg(){
+  localStorage.setItem('dvdc_cfg', JSON.stringify(getCfgFromUI()));
+}
+function getCfgFromUI(){
+  return { base:$('cfg_base').value.trim(), model:$('cfg_model').value.trim(), key:$('cfg_key').value.trim(),
+    tokens: Math.max(10, parseInt($('cfg_tokens').value,10)||1200) };
+}
+function tracked(p){ S.busyN++; const done = () => S.busyN--; p.then(done, done); return p; }
+async function chat(messages, maxTok){
+  const cfg = getCfgFromUI();
+  if(!cfg.base || !cfg.model) throw new Error('не задан endpoint/модель — НАСТРОЙКИ');
+  const ctl = new AbortController(); const kill = setTimeout(() => ctl.abort(), 120000);
+  let j;
+  try{
+    const res = await fetch(cfg.base.replace(/\/+$/,'')+'/chat/completions', {
+      method:'POST',
+      headers:{ 'content-type':'application/json', 'authorization':'Bearer '+cfg.key },
+      body: JSON.stringify({model:cfg.model, temperature:1, max_tokens: maxTok||cfg.tokens, messages}),
+      signal: ctl.signal
+    });
+    if(!res.ok){ const t = await res.text().catch(()=> ''); throw new Error('HTTP '+res.status+' '+t.slice(0,120)); }
+    j = await res.json();
+  } finally { clearTimeout(kill); }
+  // разные прокси кладут текст в разные поля; content бывает массивом частей
+  const ch = (j.choices && j.choices[0]) || {};
+  const m = ch.message || {};
+  let txt = m.content;
+  if(Array.isArray(txt)) txt = txt.map(p => (p && p.text) || '').join('');
+  if(!txt && m.reasoning_content) txt = m.reasoning_content;   // рассуждающие модели
+  if(!txt && typeof ch.text === 'string') txt = ch.text;       // старый completions-формат
+  txt = String(txt||'').trim().replace(/^["«]+|["»]+$/g,'');
+  if(!txt) throw new Error('пустой ответ (finish_reason='+(ch.finish_reason||'?')+') — возможно, модели не хватило токенов или она несовместима');
+  return txt;
+}
+// разбор объединённого ответа: четыре объекта {"ось","вариант"} одним массивом
+function parseCombo(s){
+  const src = String(s);
+  let arr = null;
+  const m = src.match(/\[[\s\S]*\]/);
+  if(m){
+    try{ arr = JSON.parse(m[0].replace(/,\s*]/,']')); }catch(e){ arr = null; }
+  }
+  if(!arr || !Array.isArray(arr)){   // запасной разбор: объекты без валидного JSON вокруг
+    arr = [...src.matchAll(/\{[^{}]*\}/g)].map(x => { try{ return JSON.parse(x[0]); }catch(e){ return null; } })
+      .filter(o => o && typeof o === 'object');
+  }
+  const frag = 'ответ: ' + src.replace(/\s+/g,' ').slice(0,80);
+  const pick = (o, keys) => { for(const k of keys){ const v = o[k.toLowerCase()] ?? o[k]; if(typeof v === 'string') return v; } return ''; };
+  const words = [], variants = new Map();
+  for(const it of (arr||[])){
+    const w = it && typeof it === 'object'
+      ? pick(it, ['ось','axis','направление','word']).trim().toLowerCase().replace(/[«»"'.]/g,'')
+      : String(it).trim().toLowerCase().replace(/[«»"'.]/g,'');   // массив голых строк = только слова
+    if(!w || w.includes(' ') || w.length > 24 || words.includes(w)) continue;
+    words.push(w);
+    const v = it && typeof it === 'object' ? pick(it, ['вариант','variant','текст','text']).trim() : '';
+    if(v) variants.set(w, v.replace(/^["«]+|["»]+$/g,''));
+  }
+  if(!words.length) throw new Error('в ответе нет осей (' + frag + ')');
+  return { words: words.slice(0,4), variants };
+}
+
+/* ---------- оси и прегенерация ---------- */
+function ctxText(){ return S.history.slice(-4).join('\n'); }
+async function ensureLabels(text){
+  let entry = S.labelCache.get(text);
+  if(entry) return entry;
+  entry = { text, words:[], variants:new Map(), proms:new Map(), failed:new Set() };
+  S.labelCache.set(text, entry);
+  if(S.labelCache.size > 40){ const k = S.labelCache.keys().next().value; S.labelCache.delete(k); }
+  const comboMsgs = hard => [
+    {role:'system', content:SYSTEM_COMBO},
+    {role:'user', content:userCombo(ctxText(), text) + (hard
+      ? '\n\nВажно: ответ — строго JSON-массив ровно из четырёх объектов, например [{"ось":"короче","вариант":"текст короче"},{"ось":"злее","вариант":"текст злее"},{"ось":"проще","вариант":"текст проще"},{"ось":"тоньше","вариант":"текст тоньше"}]. Никакого текста вне массива.'
+      : '')}
+  ];
+  let res;
+  try{
+    res = parseCombo(await tracked(chat(comboMsgs(false), tok4())));   // один запрос: и оси, и варианты
+    if(res.words.length < 4) throw new Error('осей меньше четырёх');
+  }catch(e){
+    res = parseCombo(await tracked(chat(comboMsgs(true), tok4())));    // повтор: требуем строгий формат
+  }
+  entry.words = res.words;
+  res.words.forEach(w => { const v = res.variants.get(w); if(v) entry.variants.set(w, v); });
+  // варианты, не приехавшие общим ответом, добираем точечными запросами в фоне
+  res.words.forEach(w => { if(!entry.variants.has(w)) genVariant(entry, w); });
+  return entry;
+}
+// объединённому запросу нужно вмещать четыре варианта — умножаем лимит из настроек
+function tok4(){ const t = getCfgFromUI().tokens; return Math.min(32000, Math.max(600, t*4)); }
+function genVariant(entry, w){
+  const p = tracked(chat(
+    [{role:'system', content:SYSTEM_MAIN}, {role:'user', content:userVariant(ctxText(), entry.text, w)}]));
+  entry.failed.delete(w);
+  entry.proms.set(w, p);
+  p.then(t => entry.variants.set(w, t), () => entry.failed.add(w));   // тихий учёт; ошибка всплывёт при клике
+  return p;
+}
+function setLabels(text){
+  S.labels = [];
+  ensureLabels(text)
+    .then(entry => {
+      if(S.faces[frontFace(S.q)].text !== text) return;   // текст уже уехал с грани
+      S.labels = entry.words.slice(0,4).map((w,i) =>
+        ({word:w, side:SIDE_ORDER[i], slot:SIDE_ORDER[i], entry}));
+    })
+    .catch(e => toast('нейронка не ответила: ' + e.message));
+}
+
+/* ---------- жесты куба ---------- */
+function startAnim(to, dur){ S.anim = {from:S.q, to, t0:performance.now(), dur}; }
+function onSettled(){ /* подписи обновляет вызывающий код */ }
+
+async function poke(L){
+  if(S.anim || S.editing) return;
+  const tok = (S.turnTok = (S.turnTok||0) + 1);   // новый клик по чипу отменяет ожидание прежнего
+  const steps = DIRS[L.side[0]];
+  const to = steps.reduce((q,[a,d]) => Q.mul(Q.ax(a,d), q), S.q);
+  const fi = frontFace(to);
+  let text = L.entry.variants.get(L.word);
+  if(!text && (L.entry.failed.has(L.word) || !L.entry.proms.get(L.word))){
+    genVariant(L.entry, L.word);          // неудавшийся вариант — пробуем сгенерировать ещё раз
+  }
+  if(!text){                              // куб не трогаем, пока вариант не готов
+    const prom = L.entry.proms.get(L.word);
+    if(!prom){ toast('вариант по оси «'+L.word+'» ещё не готов'); return; }
+    try{ text = await prom; }
+    catch(e){ if(tok === S.turnTok) toast('ось «'+L.word+'»: '+(e.message||'не вышло')); return; }
+    if(tok !== S.turnTok || S.anim || S.editing) return;   // пользователь уже кликнул другое / ушёл вводить
+  }
+  S.labels = [];
+  const ang = faceUpAngle(to, fi);        // текст ляжет горизонтально в конечной ориентации
+  S.faces[fi] = {text, mode:'normal'};
+  drawFaceTexture(fi, text, 'normal', ang);
+  startAnim(to, 950);
+  while(S.anim) await new Promise(r => setTimeout(r, 60));
+  setLabels(S.faces[fi].text);
+}
+
+/* ---------- ввод на грани ---------- */
+let typeT = 0;   // таймер автозапуска обработки: две секунды паузы в вводе
+function showInput(text){
+  clearTimeout(typeT);
+  S.editing = true; S.labels = [];
+  const fi = frontFace(S.q);
+  S.prevText = S.faces[fi].mode === 'normal' ? S.faces[fi].text : null;
+  S.faces[fi] = {text:'', mode:'input'};
+  drawFaceTexture(fi, '', 'input');
+  const ui = $('faceui'); ui.classList.add('show');
+  const ta = $('seed'); ta.value = text||'';
+  setTimeout(() => ta.focus(), 60);
+}
+function hideInput(){ S.editing = false; $('faceui').classList.remove('show'); $('seed').blur(); }
+function acceptInput(){
+  clearTimeout(typeT);
+  const txt = $('seed').value.trim();
+  if(!txt){ toast('пусто — введи текст фрагмента'); return; }
+  if(!getCfgFromUI().key && getCfgFromUI().base.indexOf('localhost')<0 && getCfgFromUI().base.indexOf('127.')<0){
+    toast('сначала настрой нейронку — ключ в НАСТРОЙКАХ'); openCfg(); return;
+  }
+  hideInput();
+  const fi = frontFace(S.q);
+  S.faces[fi] = {text:txt, mode:'normal'};
+  drawFaceTexture(fi, txt, 'normal', faceUpAngle(S.q, fi));
+  setLabels(txt);
+}
+// автопродолжение после фиксации: пишется само, пока пользователь не начал печатать
+async function autoContinue(){
+  try{
+    const txt = await tracked(chat([{role:'system', content:SYSTEM_MAIN},
+      {role:'user', content:userContinue(S.history.slice(-8))}]));
+    if(S.autoPend && S.editing && !$('seed').value.trim()){
+      hideInput();
+      const fi = frontFace(S.q);
+      S.faces[fi] = {text:txt, mode:'normal'};
+      drawFaceTexture(fi, txt, 'normal', faceUpAngle(S.q, fi));
+      setLabels(txt);
+    }
+  }catch(e){
+    if(S.autoPend && S.editing && !$('seed').value.trim()) toast('продолжение не родилось: ' + e.message);
+  }finally{ S.autoPend = false; }
+}
+
+/* ---------- фиксация скроллом вниз ---------- */
+function canCommit(){
+  if(S.anim || S.editing || S.committing) return false;
+  const fi = frontFace(S.q), f = S.faces[fi];
+  if(!f.text || f.mode !== 'normal') return false;
+  const r = $('stage').getBoundingClientRect();
+  return r.top < innerHeight*.85 && r.bottom > innerHeight*.15;
+}
+function commit(){
+  if(S.committing) return;
+  S.committing = true;
+  const text = S.faces[frontFace(S.q)].text;
+  // канонический кадр: куб в исходной ориентации, текст на передней грани, без мерцания и покачивания —
+  // карточка в ленте выглядит точно так же, как активный куб
+  S.anim = null; S.q = Q.ID; S.labels = []; S.holdPulse = true;
+  S.faces = FACES.map(() => ({text:'', mode:'blank'}));
+  FACES.forEach((_,i) => drawFaceTexture(i,'','blank'));
+  S.faces[0] = {text, mode:'normal'};
+  drawFaceTexture(0, text, 'normal', faceUpAngle(Q.ID, 0));
+  S.anim = {from:Q.ID, to:Q.ID, t0:performance.now(), dur:1};   // один кадр ровно в Q.ID
+  requestAnimationFrame(() => {
+    const shot = glc.toDataURL('image/png');
+    S.holdPulse = false; S.anim = null;
+    S.history.push(text);
+    saveArch(text);
+    const card = document.createElement('div'); card.className = 'hcard';
+    card.innerHTML = `<img alt="фрагмент ${S.history.length}" title="${esc(text)}" src="${shot}">`;
+    $('tape').appendChild(card);
+    // новый куб под ним
+    S.q = Q.ID; S.labels = [];
+    S.faces = FACES.map(() => ({text:'', mode:'blank'}));
+    FACES.forEach((_,i) => drawFaceTexture(i,'','blank'));
+    showInput('');
+    S.autoPend = true;
+    autoContinue();                         // продолжение пишется само; ввод своим текстом отменяет его
+    requestAnimationFrame(() => $('stage').scrollIntoView({behavior:'smooth', block:'center'}));
+    toast('фрагмент зафиксирован — снизу новый куб');
+    S.committing = false;
+  });
+}
+let dnAcc = 0, dnT = 0;
+addEventListener('wheel', e => {
+  if(e.deltaY <= 0 || !canCommit()) { dnAcc = 0; return; }
+  const now = Date.now();
+  if(now - dnT > 900) dnAcc = 0;
+  dnT = now; dnAcc += e.deltaY;
+  if(dnAcc > 150){ dnAcc = 0; commit(); }
+}, {passive:true});
+addEventListener('keyup', e => { if(e.key === 'PageDown' && canCommit()) commit(); });
+let touchY = null;
+addEventListener('touchstart', e => { touchY = e.touches[0].clientY; }, {passive:true});
+addEventListener('touchmove', e => {
+  if(touchY === null || !canCommit()) return;
+  if(e.touches[0].clientY - touchY > 70){ touchY = null; commit(); }
+}, {passive:true});
+
+/* ---------- архив ---------- */
+function loadArch(){ try{ return JSON.parse(localStorage.getItem('dvdc_texts')||'[]'); }catch(e){ return []; } }
+function saveArch(text){
+  const a = loadArch(); a.unshift({t:Date.now(), text});
+  while(a.length > 100) a.pop();
+  localStorage.setItem('dvdc_texts', JSON.stringify(a));
+  renderArch();
+}
+function renderArch(){
+  const a = loadArch();
+  $('archlist').innerHTML = a.length
+    ? a.slice(0,10).map(x => `<div class="a">${esc(x.text)}</div>`).join('')
+      + (a.length > 10 ? `<div class="a">… всего ${a.length}</div>` : '')
+    : '<div class="a">пока пусто</div>';
+}
+
+/* ---------- настройки ---------- */
+function openCfg(){ $('cfg').classList.add('open'); $('gear').classList.add('on'); }
+function closeCfg(){ $('cfg').classList.remove('open'); $('gear').classList.remove('on'); }
+function initCfgUI(){
+  const c = getCfg();
+  $('cfg_base').value = c.base; $('cfg_model').value = c.model; $('cfg_key').value = c.key;
+  $('cfg_tokens').value = c.tokens;
+  ['cfg_base','cfg_model','cfg_key','cfg_tokens'].forEach(id => $(id).addEventListener('change', saveCfg));
+  $('gear').onclick = () => $('cfg').classList.contains('open') ? closeCfg() : openCfg();
+  $('cfg_show').onclick = () => {
+    const k = $('cfg_key'); k.type = k.type === 'password' ? 'text' : 'password';
+    $('cfg_show').textContent = k.type === 'password' ? 'ПОКАЗАТЬ КЛЮЧ' : 'СКРЫТЬ КЛЮЧ';
+  };
+  $('cfg_check').onclick = async () => {
+    saveCfg(); $('cfgstat').textContent = 'проверяю связь…';
+    try{
+      const r = await chat([{role:'user', content:'Ответь одним словом: связь'}]);
+      $('cfgstat').textContent = 'связь есть: ' + r.slice(0,40);
+    }catch(e){ $('cfgstat').textContent = 'нет связи: ' + e.message; }
+  };
+  $('arch_copy').onclick = () => {
+    const a = loadArch().map(x => x.text).reverse();
+    navigator.clipboard.writeText(a.join('\n\n'))
+      .then(() => toast('весь архив скопирован'), () => toast('не вышло скопировать'));
+  };
+  $('arch_clear').onclick = () => {
+    if(confirm('Очистить архив? Действие необратимо.')){
+      localStorage.removeItem('dvdc_texts'); renderArch(); toast('архив очищен');
+    }
+  };
+  renderArch();
+  return c;
+}
+
+/* ---------- запуск ---------- */
+try{
+  if(!gl) throw new Error('контекст не создан');
+  initGL();
+  FACES.forEach((_,i) => drawFaceTexture(i,'','blank'));
+  requestAnimationFrame(render);
+}catch(e){
+  // без WebGL куб не рисуется, но окно ввода и лента живут на всю сцену
+  toast('WebGL недоступен — куб не отрисуется; включи аппаратное ускорение');
+}
+const cfg0 = initCfgUI();
+showInput('');
+if(!cfg0.key) openCfg();
+
+$('seed').addEventListener('keydown', e => {
+  S.autoPend = false;                     // пользователь печатает сам — автопродолжение отменяется
+  clearTimeout(typeT);
+  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); acceptInput(); }
+  if(e.key === 'Escape' && S.prevText){
+    clearTimeout(typeT);
+    hideInput();
+    const fi = frontFace(S.q);
+    S.faces[fi] = {text:S.prevText, mode:'normal'};
+    drawFaceTexture(fi, S.prevText, 'normal', faceUpAngle(S.q, fi));
+    setLabels(S.prevText);
+  }
+});
+// пауза в вводе на две секунды — обработка начинается без энтера
+$('seed').addEventListener('input', () => {
+  S.autoPend = false;
+  clearTimeout(typeT);
+  typeT = setTimeout(() => {
+    if(S.editing && $('seed').value.trim() && !$('cfg').classList.contains('open')) acceptInput();
+  }, 2000);
+});
+glc.addEventListener('click', () => {
+  if(S.anim || S.editing) return;
+  const fi = frontFace(S.q);
+  if(S.faces[fi].mode === 'normal') showInput(S.faces[fi].text);
+});
+</script>
+</body>
+</html>

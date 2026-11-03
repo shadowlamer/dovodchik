@@ -613,10 +613,12 @@ function genVariant(entry, w){
   return p;
 }
 function setLabels(text){
+  const tok = (S.labelTok = (S.labelTok||0) + 1);   // новый запрос осей отменяет прежний
   S.labels = [];
   ensureLabels(text)
     .then(entry => {
-      if(S.faces[frontFace(S.q)].text !== text) return;   // текст уже уехал с грани
+      if(tok !== S.labelTok) return;                       // уже перезапрошено (напр., смена пресета)
+      if(S.faces[frontFace(S.q)].text !== text) return;    // текст уже уехал с грани
       S.labels = entry.words.slice(0,4).map((w,i) =>
         ({word:w, side:SIDE_ORDER[i], slot:SIDE_ORDER[i], entry}));
     })
@@ -800,6 +802,13 @@ function setPreset(id){
   PRESETS.forEach(p => $('pbtn_'+p.id).classList[p.id === preset ? 'add' : 'remove']('on'));
   localStorage.setItem('dvdc_cfg', JSON.stringify(getCfgFromUI()));
   S.labelCache.clear();   // оси из кэша могли быть в другой тональности
+  // чипы текущего фрагмента перегенерируются в новом тоне;
+  // во время поворота это сделает код по завершении, при вводе — автоприём
+  if(!S.editing && !S.anim){
+    const fi = frontFace(S.q);
+    const t = S.faces[fi] && S.faces[fi].mode === 'normal' ? S.faces[fi].text : '';
+    if(t) setLabels(t);
+  }
 }
 function initPresets(){
   const box = $('presets');

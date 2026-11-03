@@ -74,6 +74,14 @@
   .chip.err{ color:#e06a5a; border-color:rgba(224,106,90,.7); }
   .chip.err::after{ content:" !"; }
 
+  /* удаление активного кубика: откат к предыдущему зафиксированному */
+  #delq{ position:absolute; top:2%; right:2%; z-index:40; display:none;
+    background:#0b0e0a; border:1px solid rgba(232,163,61,.45); color:var(--dim);
+    font:inherit; font-size:14px; line-height:1; padding:6px 9px; cursor:pointer;
+    box-shadow:0 0 14px rgba(232,163,61,.12); }
+  #delq.show{ display:block; }
+  #delq:hover{ color:#e06a5a; border-color:rgba(224,106,90,.7); }
+
   #toast{ position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(80px);
     background:#0b0e0a; border:1px solid rgba(232,163,61,.55); color:var(--hi);
     font-size:11.5px; letter-spacing:1px; padding:10px 18px; z-index:80; opacity:0;
@@ -96,6 +104,7 @@
       <textarea id="seed" maxlength="600" spellcheck="false" placeholder="введи текст…"></textarea>
     </div>
     <div id="chips"></div>
+    <button id="delq" title="удалить кубик — вернуться к предыдущему">✕</button>
   </div>
 
   <footer>
@@ -695,7 +704,32 @@ function commit(){
     requestAnimationFrame(() => $('stage').scrollIntoView({behavior:'smooth', block:'center'}));
     toast('фрагмент зафиксирован — снизу новый куб');
     S.committing = false;
+    updateDelq();
   });
+}
+function updateDelq(){ $('delq').classList[S.history.length ? 'add' : 'remove']('show'); }
+// удаление активного кубика: последняя фиксация отменяется, предыдущий куб снова активен
+function delCube(){
+  if(!S.history.length || S.anim || S.committing) return;
+  clearTimeout(typeT);          // таймер автоприёма ввода гаснет вместе с кубиком
+  S.autoPend = false;           // незавершённое автопродолжение отменяется
+  hideInput();
+  const text = S.history.pop();
+  const a = loadArch();         // новейшая запись архива стоит первой — её и снимаем
+  a.shift();
+  localStorage.setItem('dvdc_texts', JSON.stringify(a));
+  renderArch();
+  const tape = $('tape');
+  if(tape.lastElementChild) tape.lastElementChild.remove();
+  S.q = Q.ID; S.labels = [];
+  S.faces = FACES.map(() => ({text:'', mode:'blank'}));
+  FACES.forEach((_,i) => drawFaceTexture(i,'','blank'));
+  const fi = frontFace(S.q);
+  S.faces[fi] = {text, mode:'normal'};
+  drawFaceTexture(fi, text, 'normal', faceUpAngle(S.q, fi));
+  setLabels(text);              // чипы вернутся — кэш осей, как правило, ещё жив
+  updateDelq();
+  toast('кубик удалён — снова активен предыдущий');
 }
 let dnAcc = 0, dnT = 0;
 addEventListener('wheel', e => {
@@ -798,6 +832,8 @@ $('seed').addEventListener('input', () => {
     if(S.editing && $('seed').value.trim() && !$('cfg').classList.contains('open')) acceptInput();
   }, 2000);
 });
+$('delq').onclick = delCube;
+updateDelq();
 glc.addEventListener('click', () => {
   if(S.anim || S.editing) return;
   const fi = frontFace(S.q);
